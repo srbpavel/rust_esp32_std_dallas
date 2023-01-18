@@ -1,0 +1,55 @@
+[package]
+name = "rust_esp32_std_dallas"
+version = "0.1.0"
+authors = ["prace@srbpavel.cz <prace@srbpavel.cz>"]
+edition = "2021"
+resolver = "2"
+
+[profile.release]
+opt-level = "s"
+
+[profile.dev]
+debug = true # Symbols are nice and they don't increase the size on Flash
+opt-level = "z"
+
+[features]
+#pio = ["esp-idf-sys/pio"]
+# PAVEL
+default = ["native"]
+native = ["esp-idf-sys/native"]
+
+
+[dependencies]
+#esp-idf-sys = { version = "0.31.11", features = ["binstart"] }
+esp-idf-sys = { version = "0.32.1", features = ["binstart"] }
+
+# P
+#esp-idf-svc = { version="0.43.4", features = ["experimental", "alloc"] }
+esp-idf-svc = { version="0.45.0", features = ["experimental", "alloc"] }
+
+#esp-idf-hal = "0.39.3"
+esp-idf-hal = "0.40.1"
+
+#embedded-svc = "0.23"
+embedded-svc = "0.24"
+
+#embedded-hal = "0.2.7"
+embedded-hal = { version="0.2.7", features = ["unproven"] }
+
+#esp32c3-hal = "0.4.0"
+
+## IF CHANGED, DO NOT FORGET TO UPDATE ALSO IN ds18b20 package!!!
+#one-wire-bus = "0.1.1"
+## my fork
+one-wire-bus = { path = "/home/conan/git/srbpavel/one_wire_bus", version = "0.2.0" }
+
+#ds18b20 = "0.1.1"
+## my fork
+## { git = "https://github.com/rust-lang/regex" }
+ds18b20 = { path = "/home/conan/git/srbpavel/ds18b20", version = "0.2.0" }
+
+log = "0.4"
+
+[build-dependencies]
+#embuild = "0.30.4"
+embuild = "0.31"
