@@ -5,6 +5,9 @@
 use core::ffi;
 
 use esp_idf_svc::eventloop::*;
+use esp_idf_svc::systime::EspSystemTime;
+
+use esp_idf_sys::EspError;
 
 use std::time::Duration;
 
@@ -42,4 +45,18 @@ impl<'s> EspTypedEventDeserializer<EventLoopMessage<'s>> for EventLoopMessage<'s
     ) -> R {
         f(unsafe { data.as_payload() })
     }
+}
+
+//
+pub fn post(sysloop: EspSystemEventLoop,
+            msg: &str,
+) -> Result<bool, EspError> {
+    sysloop
+        .post(
+            &EventLoopMessage::new(
+                EspSystemTime {}.now(),
+                msg,
+            ),
+            None,
+        )
 }

@@ -2,6 +2,7 @@ mod eventloop;
 mod sensor_ds;
 
 use sensor_ds::Sensor;
+use sensor_ds::Route;
 
 use eventloop::EventLoopMessage;
 
@@ -162,8 +163,40 @@ fn main() -> Result<(), EspError> {
                    // */
                 });
             };
+
         });
 
+    // MEASURE
+    /*
+    let _one_go = sensor_i.measure(
+        &mut delay,
+        false,
+        Route::OneGo,
+        //sysloop.clone()
+    );
+    
+    let _one_by_one = sensor_i.measure(
+        &mut delay,
+        false,
+        Route::OneByOne,
+    );
+    */
+
+    let device = sensor_ii.measure(
+        &mut delay,
+        false,
+        Route::Device(rom_to_change),
+    ).unwrap();
+
+    device.iter().for_each(|device| {
+        info!(
+            "DEVICE result: {:X} -> '{:0>16}' --> {}°C",
+            device.address,
+            format!("{:b}", device.raw),
+            device.temperature,
+        );
+    });
+    
     /*
     vec![
         (&mut one_wire_bus_i, pin_i_number),
