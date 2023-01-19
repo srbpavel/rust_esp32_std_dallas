@@ -24,15 +24,15 @@ embedded-svc = "0.24"
 embedded-hal = { version="0.2.7", features = ["unproven"] }
 
 ## IF CHANGED, DO NOT FORGET TO UPDATE ALSO IN ds18b20 package!!!
-#one-wire-bus = "0.1.1"
+one-wire-bus = "0.1.1"
 ## my fork
 #one-wire-bus = { path = "/home/conan/git/srbpavel/one_wire_bus", version = "0.2.0" }
-one-wire-bus = { git = "https://github.com/srbpavel/one_wire_bus", version = "0.2.0" }
+#one-wire-bus = { git = "https://github.com/srbpavel/one_wire_bus", version = "0.2.0" }
 
 #ds18b20 = "0.1.1"
 ## my fork
-#ds18b20 = { path = "/home/conan/git/srbpavel/ds18b20", version = "0.2.0" }
-ds18b20 = { git = "https://github.com/srbpavel/ds18b20", version = "0.2.0" }
+ds18b20 = { path = "/home/conan/git/srbpavel/ds18b20", version = "0.2.0" }
+#ds18b20 = { git = "https://github.com/srbpavel/ds18b20", version = "0.2.0" }
 
 log = "0.4"
 
