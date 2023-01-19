@@ -26,6 +26,60 @@ use log::info;
 #[allow(unused_imports)]
 use log::warn;
 
+#[allow(dead_code)]
+pub struct Sensor<'a, D, P> {
+    pub pin: i32,
+    pub delay: &'a mut D,
+    pub sysloop: EspSystemEventLoop,
+    pub one_wire_bus: &'a mut OneWire<P>,
+    pub count: u32,
+}
+
+impl<D, P> Sensor<'_, D, P> {
+    // P is PinDriver
+    //
+    #[allow(dead_code)]
+    pub fn find_devices<E>(&mut self, alarm: bool) -> Result<(), E>
+    where
+        P: OutputPin<Error = E> + InputPin<Error = E>,
+        D: DelayUs<u16> + DelayMs<u16>,
+        E: Debug,
+    {
+        let devices = self.one_wire_bus.devices(alarm, self.delay);
+
+        for device in devices {
+            match device {
+                Ok(address) => {
+                    self.sysloop
+                        .post(
+                            &EventLoopMessage::new(
+                                EspSystemTime {}.now(),
+                                &format!(
+                                    "device ROM {address:X?}",
+                                    //&format!("device ROM {address:X?} {:?}",
+                                    /*
+                                    self
+                                    .one_wire_bus
+                                    .into_inner()
+                                    .pin()
+                                    ,
+                                    */
+                                ),
+                            ),
+                            None,
+                        )
+                        .unwrap(); //? // !!! LEARN TO COMBINE ERROR's
+                }
+                Err(e) => {
+                    error!("error device address: {e:?}");
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 // search for devices and just print
 // P is PinDriver
 //
@@ -211,6 +265,8 @@ where
                 format!("{:b}", sensor_data.raw_temp),
                 sensor_data.temperature,
             );
+
+            esp_idf_hal::delay::FreeRtos {}.delay_ms(100u16);
         } else {
             error!("search state is None so we break");
 
@@ -247,10 +303,7 @@ fn collect_raw(scratchpad: [u8; 9]) {
 // search for devices and return list
 //
 #[allow(dead_code)]
-pub fn list_devices<P, D, E>(
-    delay: &mut D,
-    one_wire_bus: &mut OneWire<P>,
-) -> Option<Vec<Address>>
+pub fn list_devices<P, D, E>(delay: &mut D, one_wire_bus: &mut OneWire<P>) -> Option<Vec<Address>>
 where
     P: OutputPin<Error = E> + InputPin<Error = E>,
     D: DelayUs<u16> + DelayMs<u16>,
@@ -268,18 +321,6 @@ where
             error!("error device address: {e:?}");
         }
     });
-    /*
-    devices.into_iter().for_each(|device| {
-        match device {
-            Ok(address) => {
-                address_list.push(address);
-            }
-            Err(e) => {
-                error!("error device address: {e:?}");
-            }
-        }
-    });
-    */
 
     if address_list.is_empty() {
         None
@@ -402,7 +443,7 @@ where
     E: Debug,
 {
     info!("get device temperature  / {alarm}");
-    info!("ROM: {device_address:?}");
+    info!("ROM: {device_address:?} to measure");
 
     let sensor: Ds18b20 = Ds18b20::new::<E>(device_address)?;
 

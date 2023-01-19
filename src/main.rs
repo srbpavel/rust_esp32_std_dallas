@@ -1,6 +1,8 @@
 mod eventloop;
 mod sensor_ds;
 
+use sensor_ds::Sensor;
+
 use eventloop::EventLoopMessage;
 
 use esp_idf_svc::eventloop::EspSystemEventLoop;
@@ -10,6 +12,7 @@ use esp_idf_sys::EspError;
 
 use esp_idf_hal::delay::Ets;
 use esp_idf_hal::delay::FreeRtos;
+use esp_idf_hal::gpio::IOPin;
 use esp_idf_hal::gpio::PinDriver;
 
 use embedded_hal::blocking::delay::DelayMs;
@@ -28,7 +31,6 @@ use log::warn;
 
 const SLEEP_DURATION: u16 = 60 * 1000;
 const WTD_FEEDER_DURATION: u16 = 100;
-//const SINGLE_ROM: u64 = 3891110133793834024;
 const SINGLE_ROM: u64 = 0x3600000CFAB44428;
 
 //
@@ -49,14 +51,20 @@ fn main() -> Result<(), EspError> {
     let mut delay = Ets {};
 
     let peripherals = esp_idf_hal::peripherals::Peripherals::take().unwrap();
-    let pin_i = peripherals.pins.gpio6;
-    let pin_ii = peripherals.pins.gpio4;
+    let pin_i = peripherals.pins.gpio6.downgrade();
+    let pin_ii = peripherals.pins.gpio4.downgrade();
+    //let pin_iii = peripherals.pins.gpio2.downgrade();
+    //let pin_iv = peripherals.pins.gpio1.downgrade();
 
     let pin_driver_i = PinDriver::input_output_od(pin_i)?;
     let pin_driver_ii = PinDriver::input_output_od(pin_ii)?;
+    //let pin_driver_iii = PinDriver::input_output_od(pin_iii)?;
+    //let pin_driver_iv = PinDriver::input_output_od(pin_iv)?;
 
     let pin_i_number = pin_driver_i.pin();
     let pin_ii_number = pin_driver_ii.pin();
+    //let pin_iii_number = pin_driver_iii.pin();
+    //let pin_iv_number = pin_driver_iv.pin();
 
     // BUS
     //
@@ -70,149 +78,144 @@ fn main() -> Result<(), EspError> {
     //// type OneWireResult<T, E> = Result<T, OneWireError<E>>;
     let mut one_wire_bus_i = OneWire::new(pin_driver_i).unwrap();
     let mut one_wire_bus_ii = OneWire::new(pin_driver_ii).unwrap();
+    //let mut one_wire_bus_iii = OneWire::new(pin_driver_iii).unwrap();
+    //let mut one_wire_bus_iv = OneWire::new(pin_driver_iv).unwrap();
 
     // TX // just testing instead channel/eventloop/...
+    #[allow(unused_variables)]
+    #[allow(unused_mut)]
     let mut tx_buffer = String::new();
 
-    // FIND DEVICE
-    if let Err(search_error) =
-        sensor_ds::find_devices(&mut delay, &mut one_wire_bus_i, false, &mut tx_buffer)
-    {
-        error!("Error device_search: {search_error:?}");
+    // SENSOR
+    let sensor_i = Sensor {
+        pin: pin_i_number,
+        delay: &mut delay,
+        sysloop: sysloop.clone(),
+        one_wire_bus: &mut one_wire_bus_i,
+        count: 0,
     };
 
-    warn!("TX BUFFER: {tx_buffer}");
+    vec![sensor_i].iter_mut().for_each(|sensor| {
+        // ID
+        warn!("SENSOR_ID: pin: {}", sensor.pin);
+
+        if let Err(search_error) = sensor.find_devices(false) {
+            error!("Error device_search: {search_error:?}");
+        };
+    });
 
     // <FREEZER> set with alarm -30 <-> 0
     let rom_to_change = one_wire_bus::Address(SINGLE_ROM);
 
-    // LIST
-    let device_list_i = sensor_ds::list_devices(&mut delay, &mut one_wire_bus_i);
-    let device_list_ii = sensor_ds::list_devices(&mut delay, &mut one_wire_bus_ii);
+    vec![
+        (&mut one_wire_bus_i, pin_i_number),
+        (&mut one_wire_bus_ii, pin_ii_number),
+    ]
+    .iter_mut()
+    .for_each(|(bus, id)| {
+        // ID
+        warn!("ID: {id}");
 
-    // VIEW
-    if let Some(list) = device_list_i {
-        list.iter().for_each(|device| {
-            if let Err(e) = sensor_ds::view_config(
-                &mut delay,
-                &mut one_wire_bus_i,
-                *device,
-                true,
-                sysloop.clone(),
-            ) {
-                error!("view_config: {e:?}");
-            }
-        });
-    }
+        /*
+        // FIND
+        if let Err(search_error) =
+            sensor_ds::find_devices(&mut delay, bus, false, &mut tx_buffer)
+        {
+            error!("Error device_search: {search_error:?}");
+        };
 
-    if let Some(list) = device_list_ii {
-        list.iter().for_each(|device| {
-            // VIEW CONFIG for ALL in LIST
-            if let Err(e) = sensor_ds::view_config(
-                &mut delay,
-                &mut one_wire_bus_ii,
-                *device,
-                false,
-                sysloop.clone(),
-            ) {
-                error!("view_config: {e:?}");
-            }
-            /* // SET CONFIG for ALL in LIST
-            if let Err(e) = sensor_ds::set_config(
-                &mut delay,
-                &mut one_wire_bus_ii,
-                *device, // ROM
-                55, // TH
-                0, // TL
-                None, // resolution will not change
-                // Some(Resolution::Bits12), // resoulution
-            ) {
-                println!(" ERROR setting config: {:?}", e);
+        warn!("TX BUFFER: {tx_buffer}");
+        */
+
+        // LIST
+        let device_list = sensor_ds::list_devices(&mut delay, bus);
+
+        if let Some(list) = device_list {
+            list.iter().for_each(|device| {
+                // VIEW CONFIG
+                if let Err(e) =
+                    sensor_ds::view_config(&mut delay, bus, *device, false, sysloop.clone())
+                {
+                    error!("view_config <FREEZER>: {e:?}");
+                }
+                /* // SET CONFIG for ALL in LIST
+                if let Err(e) = sensor_ds::set_config(
+                    &mut delay,
+                    &mut one_wire_bus_ii,
+                    *device, // ROM
+                    55, // TH
+                    0, // TL
+                    None, // resolution will not change
+                    // Some(Resolution::Bits12), // resoulution
+                ) {
+                    println!(" ERROR setting config: {:?}", e);
+                }
+                */
+            });
+
+            /* // <FREEZER> set alarm limits
+            if list.contains(&rom_to_change) {
+                warn!("ROM {rom_to_change:?} available we can set_config");
+
+                // /* // CONFIG CHANGE
+                if let Err(e) = sensor_ds::set_config(&mut delay,
+                                                      &mut one_wire_bus_ii,
+                                                      rom_to_change, // ROM
+                                                      0, // TH
+                                                      -30, // TL
+                                                      None, // resolution
+                ) {
+                    error!(" ERROR setting config: {:?}", e);
+                }
+                // */
+            } else {
+                error!("ROM {rom_to_change:?} not found {list:?}");
             }
             */
-        });
-
-        // /* // <FREEZER> set alarm limits
-        if list.contains(&rom_to_change) {
-            info!("ROM {rom_to_change:?} available we can set_config");
-
-            /* // CONFIG CHANGE
-            if let Err(e) = sensor_ds::set_config(&mut delay,
-                                                  &mut one_wire_bus_ii,
-                                                  rom_to_change, // ROM
-                                                  0, // TH
-                                                  -30, // TL
-                                                  None, // resolution
-            ) {
-                error!(" ERROR setting config: {:?}", e);
-            }
-            */
-        } else {
-            error!("ROM {rom_to_change:?} not found {list:?}");
         }
-        // */
-    }
+    });
+    //_
 
     sleep.delay_ms(WTD_FEEDER_DURATION);
 
     // LOOP
     loop {
-        info!("DS_1: {:?}", pin_i_number);
+        // FOR_EACH
+        vec![
+            (&mut one_wire_bus_i, pin_i_number),
+            (&mut one_wire_bus_ii, pin_ii_number),
+        ]
+        .iter_mut()
+        .for_each(|(bus, id)| {
+            // ID
+            warn!("ID: {id}");
 
-        // /* // via SINGLE
-        if let Err(e) = sensor_ds::get_temperature_by_one(&mut delay, &mut one_wire_bus_i, false) {
-            error!("TEMPERATURE SINGLE result: {e:?}");
-        };
-        // */
-        // /* // ALL in one go
-        if let Err(e) = sensor_ds::get_temperature(&mut delay, &mut one_wire_bus_i, false) {
-            error!("TEMPERATURE ALL result: {e:?}");
-        };
-        // */
-        // this feed's watchdog so next measurement does not trigger it
-        sleep.delay_ms(WTD_FEEDER_DURATION);
+            // via SINGLE
+            if let Err(e) = sensor_ds::get_temperature_by_one(&mut delay, bus, false) {
+                error!("TEMPERATURE SINGLE result: {e:?}");
+            };
 
-        info!("DS_2: {:?}", pin_ii_number);
-        /* // via SINGLE
-        let temperature_result = sensor_ds::get_temperature_by_one(
-            &mut delay,
-            &mut one_wire_bus_ii,
-            false,
-        );
-        println!("   TEMPERATURE SINGLE result: {temperature_result:?}");
+            sleep.delay_ms(WTD_FEEDER_DURATION);
 
-        sleep.delay_ms(WTD_FEEDER_DURATION);
-        */
+            // via ALL
+            if let Err(e) = sensor_ds::get_temperature(&mut delay, bus, false) {
+                error!("TEMPERATURE ALL result: {e:?}");
+            };
 
-        // /* // ALL in one go
-        if let Err(e) = sensor_ds::get_temperature(&mut delay, &mut one_wire_bus_ii, false) {
-            error!("TEMPERATURE ALL result Error: {e:?}");
-        };
+            // <FREEZER> as SINGLE DEVICE
+            // VIEW
+            if let Err(e) =
+                sensor_ds::view_config(&mut delay, bus, rom_to_change, false, sysloop.clone())
+            {
+                error!("ERROR <FREEZER> {rom_to_change:X?} view_config: {e:?}");
+            }
 
-        // /* // ALL in one go only with ALARM
-        if let Err(e) = sensor_ds::get_temperature(&mut delay, &mut one_wire_bus_ii, true) {
-            error!("TEMPERATURE ALL result Error: {e:?}");
-        };
-        // */
-        // <FREEZER> READ SINGLE DEVICE
-        if let Err(e) = sensor_ds::view_config(
-            &mut delay,
-            &mut one_wire_bus_ii,
-            rom_to_change,
-            false,
-            sysloop.clone(),
-        ) {
-            error!("ERROR {rom_to_change:X?} view_config: {e:?}");
-        }
-
-        if let Err(e) = sensor_ds::get_device_temperature(
-            &mut delay,
-            &mut one_wire_bus_ii,
-            false,
-            rom_to_change,
-        ) {
-            error!("ERROR {rom_to_change:X?} get_device_temperature: {e:?}");
-        }
+            // MEASURE
+            if let Err(e) = sensor_ds::get_device_temperature(&mut delay, bus, false, rom_to_change)
+            {
+                error!("ERROR <FREEZER> {rom_to_change:X?} get_device_temperature: {e:?}");
+            }
+        });
         //_
 
         sleep.delay_ms(SLEEP_DURATION);
