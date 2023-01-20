@@ -2,6 +2,7 @@ use crate::eventloop;
 
 use std::fmt;
 use std::fmt::Debug;
+use std::fmt::Display;
 
 use one_wire_bus::Address;
 use one_wire_bus::OneWire;
@@ -56,7 +57,7 @@ impl Measurement {
     }
 }
 
-impl fmt::Display for Measurement {
+impl Display for Measurement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -70,15 +71,24 @@ impl fmt::Display for Measurement {
     }
 }
 
-//pub struct Sensor<'a, P> {
+pub struct SensorConfig(SensorData);
+
+impl Display for SensorConfig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "sensor_config -> TL: {} TH:{} resolution: {:?}",
+            self.0.alarm_temp_low, self.0.alarm_temp_high, self.0.resolution,
+        )
+    }
+}
+
 pub struct Sensor<P> {
     pub pin: i32,
     pub sysloop: EspSystemEventLoop,
-    //pub one_wire_bus: &'a mut OneWire<P>,
     pub one_wire_bus: OneWire<P>,
 }
 
-//impl<P> Sensor<'_, P> {
 impl<P> Sensor<P> {
     pub fn measure<D, E>(
         &mut self,
@@ -220,7 +230,7 @@ impl<P> Sensor<P> {
         delay: &mut D,
         device_address: Address,
         update_measurement: bool,
-    ) -> OneWireResult<(), E>
+    ) -> OneWireResult<SensorConfig, E>
     where
         P: OutputPin<Error = E> + InputPin<Error = E>,
         D: DelayUs<u16> + DelayMs<u16>,
@@ -237,24 +247,7 @@ impl<P> Sensor<P> {
 
         let device_data = device.read_data(&mut self.one_wire_bus, delay)?;
 
-        if let Err(e) = eventloop::post(
-            &self.sysloop,
-            &format!(
-                "device data -> ROM: {device_address:?} TL: {} TH:{} resolution: {:?} {:?}",
-                device_data.alarm_temp_low,
-                device_data.alarm_temp_high,
-                device_data.resolution,
-                if update_measurement.eq(&true) {
-                    Some(device_data.temperature)
-                } else {
-                    None
-                },
-            ),
-        ) {
-            error!("ERROR eventloop msg: {e}");
-        }
-
-        Ok(())
+        Ok(SensorConfig(device_data))
     }
 
     // set config for given address

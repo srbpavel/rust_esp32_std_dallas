@@ -1,10 +1,10 @@
 mod eventloop;
 mod sensor_ds;
 
+use eventloop::EventLoopMessage;
+
 use sensor_ds::Route;
 use sensor_ds::Sensor;
-
-use eventloop::EventLoopMessage;
 
 use one_wire_bus::OneWire;
 
@@ -31,7 +31,7 @@ use log::info;
 #[allow(unused_imports)]
 use log::warn;
 
-//use anyhow;
+use std::time::Instant;
 
 const EVENTLOOP_INFO: bool = true; //false;
 
@@ -64,7 +64,7 @@ fn main() -> anyhow::Result<()> {
     warn!("event_loop init");
     let _subscription = sysloop.subscribe(move |msg: &EventLoopMessage| {
         if EVENTLOOP_INFO.eq(&true) {
-            info!(">>> [{}] {}", msg.duration.as_secs(), msg.data);
+            info!(">>> <{}> {}", msg.duration.as_secs(), msg.data);
         }
     })?;
 
@@ -72,131 +72,84 @@ fn main() -> anyhow::Result<()> {
     let mut delay = Ets {};
 
     let peripherals = esp_idf_hal::peripherals::Peripherals::take().unwrap();
+    // GPIO2 turn RGB sometimes!
     let pin_i = peripherals.pins.gpio6.downgrade();
     let pin_ii = peripherals.pins.gpio4.downgrade();
     // no devices here, just to verify error handling
-    let pin_iii = peripherals.pins.gpio2.downgrade();
+    let pin_iii = peripherals.pins.gpio1.downgrade();
 
-    let pin_driver_i = PinDriver::input_output_od(pin_i)?;
-    let pin_driver_ii = PinDriver::input_output_od(pin_ii)?;
-    let pin_driver_iii = PinDriver::input_output_od(pin_iii)?;
-
-    /*
-    let pin_i_number = pin_driver_i.pin();
-    let pin_ii_number = pin_driver_ii.pin();
-    let pin_iii_number = pin_driver_iii.pin();
-
-    // BUS
-    //
-    //// impl<T, E> OneWire<T>
-    ////  where
-    ////   T: InputPin<Error = E>,
-    ////   T: OutputPin<Error = E>,
-    ////
-    //// pub fn new(pin: T) -> OneWireResult<OneWire<T>, E>
-    ////
-    //// type OneWireResult<T, E> = Result<T, OneWireError<E>>;
-    let mut one_wire_bus_i = OneWire::new(pin_driver_i).unwrap();
-    let mut one_wire_bus_ii = OneWire::new(pin_driver_ii).unwrap();
-    let mut one_wire_bus_iii = OneWire::new(pin_driver_iii).unwrap();
-
-    // SENSOR
-    let mut sensor_i = Sensor {
-        pin: pin_i_number,
-        sysloop: sysloop.clone(),
-        one_wire_bus: &mut one_wire_bus_i,
-    };
-
-    let mut sensor_ii = Sensor {
-        pin: pin_ii_number,
-        sysloop: sysloop.clone(),
-        one_wire_bus: &mut one_wire_bus_ii,
-    };
-
-    let mut sensor_iii = Sensor {
-        pin: pin_iii_number,
-        sysloop: sysloop.clone(),
-        one_wire_bus: &mut one_wire_bus_iii,
-    };
-    */
-
-    let mut all_sensors: Vec<Sensor<_>> =
-        vec![pin_driver_i, pin_driver_ii, pin_driver_iii]
+    let mut all_sensors: Vec<Sensor<_>> = vec![pin_i, pin_ii, pin_iii]
         .into_iter()
-        //.iter()
-        //.filter_map(move |driver| {
-        .filter_map(|driver| {
-            let pin_number = driver.pin();
-            //match OneWire::new(*driver) {
-            match OneWire::new(driver) {
-                Ok(bus) => {
-                    Some(Sensor {
-                        pin: pin_number,
+        .filter_map(|pin| match PinDriver::input_output_od(pin) {
+            Ok(driver) => {
+                let pin = driver.pin();
+
+                match OneWire::new(driver) {
+                    Ok(one_wire_bus) => Some(Sensor {
+                        pin,
                         sysloop: sysloop.clone(),
-                        //one_wire_bus: &mut bus
-                        one_wire_bus: bus
-                    })
-                },
-                Err(_) => None,
-            }})
+                        one_wire_bus,
+                    }),
+                    Err(_) => None,
+                }
+            }
+            Err(_) => None,
+        })
         .collect();
-    
+
     // <FREEZER> set with negative
     let rom_to_change = one_wire_bus::Address(SINGLE_ROM);
 
     // ONCE
-    //vec![&mut sensor_i, &mut sensor_ii, &mut sensor_iii]
-    all_sensors
-        .iter_mut()
-        .for_each(|sensor| {
-            // LIST
-            warn!("@list devices at pin: {}", sensor.pin);
-            let device_list = sensor.list_devices(&mut delay);
+    all_sensors.iter_mut().for_each(|sensor| {
+        // LIST
+        warn!("@list devices at pin: {}", sensor.pin);
+        let device_list = sensor.list_devices(&mut delay);
 
-            if let Some(list) = device_list {
-                list.iter().for_each(|device| {
-                    // VIEW CONFIG
-                    warn!("@view device config");
-                    if let Err(e) = sensor.view_config(&mut delay, *device, false)
-                    {
-                        error!("view_config <FREEZER>: {e:?}");
+        if let Some(list) = device_list {
+            list.iter().for_each(|device| {
+                // VIEW CONFIG
+                warn!("@view device config: {:x}", device.0);
+                match sensor.view_config(&mut delay, *device, false) {
+                    Ok(c) => info!("{c}"),
+                    Err(e) => error!("view config: {e:?}"),
+                }
+
+                // SET CONFIG for ALL in LIST
+                if ALARM_CHANGE.eq(&true) {
+                    warn!("@set new config for all devices");
+                    if let Err(e) = sensor.set_config(
+                        &mut delay, *device, TH, // TH 55
+                        TL, // TL 0
+                        RESOLUTION,
+                    ) {
+                        error!("setting config for all devices: {e:?}");
                     }
-                    // SET CONFIG for ALL in LIST
-                    if ALARM_CHANGE.eq(&true) {
-                        warn!("@set new config for all devices");
+                }
+
+                // <FREEZER> set alarm limits
+                warn!("@verify if device is the one to change config on");
+                if device.eq(&rom_to_change) {
+                    warn!("@set new config for single device {rom_to_change:?}");
+
+                    // CONFIG CHANGE
+                    if SINGLE_ALARM_CHANGE.eq(&true) {
                         if let Err(e) = sensor.set_config(
-                            &mut delay, *device,
-                            TH, // TH 55
-                            TL, // TL 0
-                            RESOLUTION,
+                            &mut delay,
+                            rom_to_change,
+                            SINGLE_TH, // TH 0
+                            SINGLE_TL, // TL -30
+                            SINGLE_RESOLUTION,
                         ) {
-                            error!("setting config for all devices: {e:?}");
+                            error!("setting config: {e:?}");
                         }
                     }
-
-                    // <FREEZER> set alarm limits
-                    warn!("@verify if device is the one to change config on");
-                    if device.eq(&rom_to_change) {
-                        warn!("@set new config for single device {rom_to_change:?}");
-
-                        // CONFIG CHANGE
-                        if SINGLE_ALARM_CHANGE.eq(&true) {
-                            if let Err(e) = sensor.set_config(
-                                &mut delay,
-                                rom_to_change,
-                                SINGLE_TH, // TH 0
-                                SINGLE_TL, // TL -30
-                                SINGLE_RESOLUTION,
-                            ) {
-                                error!("setting config: {e:?}");
-                            }
-                        }
-                    } else {
-                        warn!("{rom_to_change:?} not found");
-                    }
-                });
-            };
-        });
+                } else {
+                    warn!("{rom_to_change:?} not found");
+                }
+            });
+        };
+    });
 
     sleep.delay_ms(WTD_FEEDER_DURATION);
 
@@ -208,16 +161,21 @@ fn main() -> anyhow::Result<()> {
         warn!("i: [{cycle_counter}]");
 
         // SENSOR
-        //vec![&mut sensor_i, &mut sensor_ii]
         all_sensors
             .iter_mut()
             .for_each(|sensor| {
                 // ByOne
                 warn!("@measure temperature for all sensors OneByOne");
+
+                let start = Instant::now();
                 match sensor.measure(&mut delay, false, Route::ByOne) {
                     Ok(m) => m.iter().for_each(|m| info!("{m}")),
                     Err(e) => error!("[{}] MEASURE single result: {e:?}", sensor.pin),
                 }
+                let end = Instant::now();
+                error!("Route::ByOne duration -> {:?}",
+                       end.duration_since(start),
+                );
 
                 sleep.delay_ms(WTD_FEEDER_DURATION);
 
@@ -238,14 +196,13 @@ fn main() -> anyhow::Result<()> {
 
                 // <FREEZER> as SINGLE DEVICE
                 // VIEW
-                warn!("@view device {rom_to_change:?} config");
-                if let Err(e) =
-                    sensor.view_config(&mut delay, rom_to_change, false)
-                {
-                    error!(
+                warn!("@view device config: {rom_to_change:x?}"); //xxx
+                match sensor.view_config(&mut delay, rom_to_change, false) {
+                    Ok(c) => info!("{c}"),
+                    Err(e) => error!(
                         "[{}] <FREEZER> {rom_to_change:?} view_config: {e:?}",
                         sensor.pin
-                    );
+                    ),
                 }
 
                 // MEASURE Device(Address)
