@@ -48,15 +48,6 @@ impl<'s> EspTypedEventDeserializer<EventLoopMessage<'s>> for EventLoopMessage<'s
 }
 
 //
-pub fn post(sysloop: EspSystemEventLoop,
-            msg: &str,
-) -> Result<bool, EspError> {
-    sysloop
-        .post(
-            &EventLoopMessage::new(
-                EspSystemTime {}.now(),
-                msg,
-            ),
-            None,
-        )
+pub fn post(sysloop: EspSystemEventLoop, msg: &str) -> Result<bool, EspError> {
+    sysloop.post(&EventLoopMessage::new(EspSystemTime {}.now(), msg), None)
 }
