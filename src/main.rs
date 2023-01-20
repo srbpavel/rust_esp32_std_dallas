@@ -128,7 +128,7 @@ fn main() -> Result<(), EspError> {
                 list.iter().for_each(|device| {
                     // VIEW CONFIG
                     warn!("@view device config");
-                    if let Err(e) = sensor.view_config(&mut delay, *device, false, sysloop.clone())
+                    if let Err(e) = sensor.view_config(&mut delay, *device, false)
                     {
                         error!("view_config <FREEZER>: {e:?}");
                     }
@@ -176,7 +176,7 @@ fn main() -> Result<(), EspError> {
 
     loop {
         cycle_counter += 1;
-        warn!("### i: {cycle_counter}");
+        warn!("i: [{cycle_counter}]");
 
         // SENSOR
         vec![&mut sensor_i, &mut sensor_ii]
@@ -210,7 +210,7 @@ fn main() -> Result<(), EspError> {
                 // VIEW
                 warn!("@view device {rom_to_change:?} config");
                 if let Err(e) =
-                    sensor.view_config(&mut delay, rom_to_change, false, sysloop.clone())
+                    sensor.view_config(&mut delay, rom_to_change, false)
                 {
                     error!(
                         "[{}] <FREEZER> {rom_to_change:?} view_config: {e:?}",

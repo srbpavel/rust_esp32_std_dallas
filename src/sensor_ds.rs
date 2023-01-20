@@ -1,5 +1,4 @@
 use crate::eventloop;
-use crate::EventLoopMessage;
 
 use std::fmt;
 use std::fmt::Debug;
@@ -20,7 +19,6 @@ use embedded_hal::digital::v2::OutputPin;
 use esp_idf_hal::delay::FreeRtos;
 
 use esp_idf_svc::eventloop::EspSystemEventLoop;
-use esp_idf_svc::systime::EspSystemTime;
 
 #[allow(unused_imports)]
 use log::error;
@@ -191,15 +189,12 @@ impl<P> Sensor<'_, P> {
 
         devices.into_iter().for_each(|device| match device {
             Ok(address) => {
-                self.sysloop
-                    .post(
-                        &EventLoopMessage::new(
-                            EspSystemTime {}.now(),
-                            &format!("device ROM {address:X?} / pin: {}", self.pin),
-                        ),
-                        None,
-                    )
-                    .unwrap(); //? // !!! LEARN TO COMBINE ERROR's
+                if let Err(e) = eventloop::post(
+                    &self.sysloop,
+                    &format!("# device ROM {address:X?} / pin: {}", self.pin),
+                ) {
+                    error!("ERROR eventloop msg: {e}");
+                }
 
                 address_list.push(address);
             }
@@ -222,7 +217,6 @@ impl<P> Sensor<'_, P> {
         delay: &mut D,
         device_address: Address,
         update_measurement: bool,
-        sysloop: EspSystemEventLoop,
     ) -> OneWireResult<(), E>
     where
         P: OutputPin<Error = E> + InputPin<Error = E>,
@@ -241,9 +235,9 @@ impl<P> Sensor<'_, P> {
         let device_data = device.read_data(self.one_wire_bus, delay)?;
 
         if let Err(e) = eventloop::post(
-            sysloop,
+            &self.sysloop,
             &format!(
-                "device data -> ROM: {device_address:?} TL: {} TH:{} resolution: {:?} {:?}",
+                "# device data -> ROM: {device_address:?} TL: {} TH:{} resolution: {:?} {:?}",
                 device_data.alarm_temp_low,
                 device_data.alarm_temp_high,
                 device_data.resolution,
