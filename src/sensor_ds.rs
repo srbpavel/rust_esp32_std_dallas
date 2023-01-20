@@ -2,7 +2,8 @@ use crate::eventloop;
 
 use std::fmt;
 use std::fmt::Debug;
-use std::fmt::Display;
+
+use std::ops;
 
 use one_wire_bus::Address;
 use one_wire_bus::OneWire;
@@ -57,7 +58,7 @@ impl Measurement {
     }
 }
 
-impl Display for Measurement {
+impl fmt::Display for Measurement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -73,12 +74,20 @@ impl Display for Measurement {
 
 pub struct SensorConfig(SensorData);
 
-impl Display for SensorConfig {
+impl ops::Deref for SensorConfig {
+    type Target = SensorData;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl fmt::Display for SensorConfig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
             "sensor_config -> TL: {} TH:{} resolution: {:?}",
-            self.0.alarm_temp_low, self.0.alarm_temp_high, self.0.resolution,
+            self.alarm_temp_low, self.alarm_temp_high, self.resolution,
         )
     }
 }
@@ -231,6 +240,7 @@ impl<P> Sensor<P> {
         device_address: Address,
         update_measurement: bool,
     ) -> OneWireResult<SensorConfig, E>
+    //) -> OneWireResult<SensorConfig<SensorData>, E>
     where
         P: OutputPin<Error = E> + InputPin<Error = E>,
         D: DelayUs<u16> + DelayMs<u16>,
