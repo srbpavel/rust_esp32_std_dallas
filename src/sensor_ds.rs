@@ -3,7 +3,6 @@ use crate::EventLoopMessage;
 
 use std::fmt;
 use std::fmt::Debug;
-//use std::fmt::Write;
 
 use one_wire_bus::Address;
 use one_wire_bus::OneWire;
@@ -41,7 +40,6 @@ pub enum Route {
 
 pub struct Measurement {
     pub pin: i32,
-    //pub address: u64,
     pub address: Address,
     pub temperature: f32,
     pub raw_temp: u16,
@@ -52,7 +50,6 @@ impl Measurement {
     fn new(pin: i32, address: Address, sensor: SensorData) -> Self {
         Self {
             pin,
-            //address: address.0,
             address,
             temperature: sensor.temperature,
             raw_temp: sensor.raw_temp,
@@ -101,6 +98,7 @@ impl<P> Sensor<'_, P> {
             Route::OneShot => {
                 ds18b20::start_simultaneous_temp_measurement(self.one_wire_bus, delay)?;
 
+                // using max delay
                 Resolution::Bits12.delay_for_measurement_time(delay);
 
                 let mut search_state = None;
@@ -147,6 +145,8 @@ impl<P> Sensor<'_, P> {
 
                         sensor.start_temp_measurement(self.one_wire_bus, delay)?;
 
+                        // max delay
+                        // we can view config, read resolution and use that
                         Resolution::Bits12.delay_for_measurement_time(delay);
 
                         let sensor_data = sensor.read_data(self.one_wire_bus, delay)?;
@@ -164,6 +164,8 @@ impl<P> Sensor<'_, P> {
 
                 sensor.start_temp_measurement(self.one_wire_bus, delay)?;
 
+                // max delay
+                // we can view config, read resolution and use that
                 Resolution::Bits12.delay_for_measurement_time(delay);
 
                 let sensor_data = sensor.read_data(self.one_wire_bus, delay)?;
@@ -174,59 +176,6 @@ impl<P> Sensor<'_, P> {
 
         Ok(result)
     }
-
-    /*
-    // OBSOLETE -> TO DEL
-    // P is PinDriver
-    //
-    pub fn find_devices<E, D, W>(
-        &mut self,
-        alarm: bool,
-        delay: &mut D,
-        tx: &mut W,
-    ) -> Result<(), E>
-    where
-        P: OutputPin<Error = E> + InputPin<Error = E>,
-        D: DelayUs<u16> + DelayMs<u16>,
-        E: Debug,
-        W: Write,
-    {
-        writeln!(tx, "find_devices / {alarm}").unwrap();
-
-        let devices = self.one_wire_bus.devices(alarm, delay);
-
-        for device in devices {
-            match device {
-                Ok(address) => {
-                    writeln!(
-                        tx,
-                        "device at address {:X?} with family code: {:#x?}",
-                        address,
-                        address.family_code(),
-                    ).unwrap();
-
-                    self.sysloop
-                        .post(
-                            &EventLoopMessage::new(
-                                EspSystemTime {}.now(),
-                                &format!(
-                                    "device ROM {address:X?} / pin: {}",
-                                    self.pin,
-                                ),
-                            ),
-                            None,
-                        )
-                        .unwrap(); //? // !!! LEARN TO COMBINE ERROR's
-                }
-                Err(e) => {
-                    error!("error device address: {e:?}");
-                }
-            }
-        }
-
-        Ok(())
-    }
-    */
 
     // search for devices and return list
     //
@@ -285,6 +234,7 @@ impl<P> Sensor<'_, P> {
         // in case we want also start new measurement
         if update_measurement.eq(&true) {
             device.start_temp_measurement(self.one_wire_bus, delay)?;
+            // max delay
             Resolution::Bits12.delay_for_measurement_time(delay);
         }
 

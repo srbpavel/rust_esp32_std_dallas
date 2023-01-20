@@ -35,6 +35,7 @@ use log::warn;
 const SLEEP_DURATION: u16 = 60 * 1000;
 const WTD_FEEDER_DURATION: u16 = 100;
 
+// param's for setting new alarm and resolution
 const ALARM_CHANGE: bool = false;
 const TH: i8 = 55;
 const TL: i8 = 0;
@@ -42,7 +43,7 @@ const RESOLUTION: Option<Resolution> = None;
 //const RESOLUTION: Option<Resolution> = Some(Resolution::Bits12);
 
 const SINGLE_ALARM_CHANGE: bool = false;
-const SINGLE_ROM: u64 = 0x3600000CFAB44428;
+const SINGLE_ROM: u64 = 0x3600000CFAB44428; // <FREEZER>
 const SINGLE_TH: i8 = 0;
 const SINGLE_TL: i8 = -30;
 const SINGLE_RESOLUTION: Option<Resolution> = None;
@@ -93,11 +94,6 @@ fn main() -> Result<(), EspError> {
     let mut one_wire_bus_ii = OneWire::new(pin_driver_ii).unwrap();
     let mut one_wire_bus_iii = OneWire::new(pin_driver_iii).unwrap();
 
-    /* TO DEL
-    // TX // just testing instead channel/eventloop/...
-    //let mut tx_buffer = String::new();
-     */
-
     // SENSOR
     let mut sensor_i = Sensor {
         pin: pin_i_number,
@@ -124,12 +120,6 @@ fn main() -> Result<(), EspError> {
     vec![&mut sensor_i, &mut sensor_ii, &mut sensor_iii]
         .iter_mut()
         .for_each(|sensor| {
-            /* TO DEL
-            if let Err(search_error) = sensor.find_devices(false, &mut delay, &mut tx_buffer) {
-                error!("Error device_search: {search_error:?}");
-            };
-            */
-
             // LIST
             warn!("@list devices at pin: {}", sensor.pin);
             let device_list = sensor.list_devices(&mut delay);
@@ -146,18 +136,19 @@ fn main() -> Result<(), EspError> {
                     if ALARM_CHANGE.eq(&true) {
                         warn!("@set new config for all devices");
                         if let Err(e) = sensor.set_config(
-                            &mut delay, *device, TH, // TH 55
+                            &mut delay, *device,
+                            TH, // TH 55
                             TL, // TL 0
                             RESOLUTION,
                         ) {
-                            println!(" ERROR setting config: {e:?}");
+                            error!("setting config for all devices: {e:?}");
                         }
                     }
 
                     // <FREEZER> set alarm limits
                     warn!("@verify if device is the one to change config on");
                     if device.eq(&rom_to_change) {
-                        warn!("@set new config for single device");
+                        warn!("@set new config for single device {rom_to_change:?}");
 
                         // CONFIG CHANGE
                         if SINGLE_ALARM_CHANGE.eq(&true) {
@@ -168,11 +159,11 @@ fn main() -> Result<(), EspError> {
                                 SINGLE_TL, // TL -30
                                 SINGLE_RESOLUTION,
                             ) {
-                                error!(" ERROR setting config: {e:?}");
+                                error!("setting config: {e:?}");
                             }
                         }
                     } else {
-                        error!("ROM {rom_to_change:?} not found {list:?}");
+                        warn!("{rom_to_change:?} not found {list:?}");
                     }
                 });
             };
@@ -191,10 +182,6 @@ fn main() -> Result<(), EspError> {
         vec![&mut sensor_i, &mut sensor_ii]
             .iter_mut()
             .for_each(|sensor| {
-                // ID
-                // do we want it also with each measurement?
-                //warn!("SENSOR_ID: pin: {}", sensor.pin);
-
                 // ByOne
                 warn!("@measure temperature for all sensors OneByOne");
                 match sensor.measure(&mut delay, false, Route::ByOne) {
@@ -231,7 +218,7 @@ fn main() -> Result<(), EspError> {
                     );
                 }
 
-                // Device(Address)
+                // MEASURE Device(Address)
                 let mut alarm = false;
                 warn!("@measure device {rom_to_change:?} + alarm {alarm}");
                 match sensor.measure(&mut delay, alarm, Route::Device(rom_to_change)) {
