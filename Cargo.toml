@@ -23,6 +23,8 @@ esp-idf-hal = "0.40.1"
 embedded-svc = "0.24"
 embedded-hal = { version="0.2.7", features = ["unproven"] }
 
+anyhow = "1"
+
 ## IF CHANGED, DO NOT FORGET TO UPDATE ALSO IN ds18b20 package!!!
 one-wire-bus = "0.1.1"
 ## my fork
@@ -38,3 +40,4 @@ log = "0.4"
 
 [build-dependencies]
 embuild = "0.31"
+anyhow = "1"

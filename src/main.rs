@@ -15,7 +15,6 @@ use embedded_hal::blocking::delay::DelayMs;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 
 use esp_idf_sys as _;
-use esp_idf_sys::EspError;
 
 use esp_idf_hal::delay::Ets;
 use esp_idf_hal::delay::FreeRtos;
@@ -31,6 +30,10 @@ use log::error;
 use log::info;
 #[allow(unused_imports)]
 use log::warn;
+
+//use anyhow;
+
+const EVENTLOOP_INFO: bool = true; //false;
 
 const SLEEP_DURATION: u16 = 60 * 1000;
 const WTD_FEEDER_DURATION: u16 = 100;
@@ -50,7 +53,7 @@ const SINGLE_RESOLUTION: Option<Resolution> = None;
 //const SINGLE_RESOLUTION: Option<Resolution> = Some(Resolution::Bits12);
 
 //
-fn main() -> Result<(), EspError> {
+fn main() -> anyhow::Result<()> {
     esp_idf_sys::link_patches();
     EspLogger::initialize_default();
 
@@ -60,7 +63,9 @@ fn main() -> Result<(), EspError> {
     let sysloop = EspSystemEventLoop::take()?;
     warn!("event_loop init");
     let _subscription = sysloop.subscribe(move |msg: &EventLoopMessage| {
-        info!("[{}] {}", msg.duration.as_secs(), msg.data.trim());
+        if EVENTLOOP_INFO.eq(&true) {
+            info!(">>> [{}] {}", msg.duration.as_secs(), msg.data);
+        }
     })?;
 
     let mut sleep = FreeRtos {};
@@ -76,6 +81,7 @@ fn main() -> Result<(), EspError> {
     let pin_driver_ii = PinDriver::input_output_od(pin_ii)?;
     let pin_driver_iii = PinDriver::input_output_od(pin_iii)?;
 
+    /*
     let pin_i_number = pin_driver_i.pin();
     let pin_ii_number = pin_driver_ii.pin();
     let pin_iii_number = pin_driver_iii.pin();
@@ -112,12 +118,35 @@ fn main() -> Result<(), EspError> {
         sysloop: sysloop.clone(),
         one_wire_bus: &mut one_wire_bus_iii,
     };
+    */
 
+    let mut all_sensors: Vec<Sensor<_>> =
+        vec![pin_driver_i, pin_driver_ii, pin_driver_iii]
+        .into_iter()
+        //.iter()
+        //.filter_map(move |driver| {
+        .filter_map(|driver| {
+            let pin_number = driver.pin();
+            //match OneWire::new(*driver) {
+            match OneWire::new(driver) {
+                Ok(bus) => {
+                    Some(Sensor {
+                        pin: pin_number,
+                        sysloop: sysloop.clone(),
+                        //one_wire_bus: &mut bus
+                        one_wire_bus: bus
+                    })
+                },
+                Err(_) => None,
+            }})
+        .collect();
+    
     // <FREEZER> set with negative
     let rom_to_change = one_wire_bus::Address(SINGLE_ROM);
 
     // ONCE
-    vec![&mut sensor_i, &mut sensor_ii, &mut sensor_iii]
+    //vec![&mut sensor_i, &mut sensor_ii, &mut sensor_iii]
+    all_sensors
         .iter_mut()
         .for_each(|sensor| {
             // LIST
@@ -179,7 +208,8 @@ fn main() -> Result<(), EspError> {
         warn!("i: [{cycle_counter}]");
 
         // SENSOR
-        vec![&mut sensor_i, &mut sensor_ii]
+        //vec![&mut sensor_i, &mut sensor_ii]
+        all_sensors
             .iter_mut()
             .for_each(|sensor| {
                 // ByOne

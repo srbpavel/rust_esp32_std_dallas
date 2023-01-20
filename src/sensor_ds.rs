@@ -70,13 +70,16 @@ impl fmt::Display for Measurement {
     }
 }
 
-pub struct Sensor<'a, P> {
+//pub struct Sensor<'a, P> {
+pub struct Sensor<P> {
     pub pin: i32,
     pub sysloop: EspSystemEventLoop,
-    pub one_wire_bus: &'a mut OneWire<P>,
+    //pub one_wire_bus: &'a mut OneWire<P>,
+    pub one_wire_bus: OneWire<P>,
 }
 
-impl<P> Sensor<'_, P> {
+//impl<P> Sensor<'_, P> {
+impl<P> Sensor<P> {
     pub fn measure<D, E>(
         &mut self,
         delay: &mut D,
@@ -94,7 +97,7 @@ impl<P> Sensor<'_, P> {
 
         match route {
             Route::OneShot => {
-                ds18b20::start_simultaneous_temp_measurement(self.one_wire_bus, delay)?;
+                ds18b20::start_simultaneous_temp_measurement(&mut self.one_wire_bus, delay)?;
 
                 // using max delay
                 Resolution::Bits12.delay_for_measurement_time(delay);
@@ -116,7 +119,7 @@ impl<P> Sensor<'_, P> {
                         }
 
                         let sensor: Ds18b20 = Ds18b20::new::<E>(device_address)?;
-                        let sensor_data = sensor.read_data(self.one_wire_bus, delay)?;
+                        let sensor_data = sensor.read_data(&mut self.one_wire_bus, delay)?;
 
                         result.push(Measurement::new(self.pin, device_address, sensor_data));
                     } else {
@@ -141,13 +144,13 @@ impl<P> Sensor<'_, P> {
 
                         let sensor: Ds18b20 = Ds18b20::new::<E>(device_address)?;
 
-                        sensor.start_temp_measurement(self.one_wire_bus, delay)?;
+                        sensor.start_temp_measurement(&mut self.one_wire_bus, delay)?;
 
                         // max delay
                         // we can view config, read resolution and use that
                         Resolution::Bits12.delay_for_measurement_time(delay);
 
-                        let sensor_data = sensor.read_data(self.one_wire_bus, delay)?;
+                        let sensor_data = sensor.read_data(&mut self.one_wire_bus, delay)?;
 
                         result.push(Measurement::new(self.pin, device_address, sensor_data));
 
@@ -160,13 +163,13 @@ impl<P> Sensor<'_, P> {
             Route::Device(device_address) => {
                 let sensor: Ds18b20 = Ds18b20::new::<E>(device_address)?;
 
-                sensor.start_temp_measurement(self.one_wire_bus, delay)?;
+                sensor.start_temp_measurement(&mut self.one_wire_bus, delay)?;
 
                 // max delay
                 // we can view config, read resolution and use that
                 Resolution::Bits12.delay_for_measurement_time(delay);
 
-                let sensor_data = sensor.read_data(self.one_wire_bus, delay)?;
+                let sensor_data = sensor.read_data(&mut self.one_wire_bus, delay)?;
 
                 result.push(Measurement::new(self.pin, device_address, sensor_data));
             }
@@ -185,13 +188,13 @@ impl<P> Sensor<'_, P> {
     {
         let mut address_list = Vec::new();
 
-        let devices = self.one_wire_bus.devices(false, delay);
+        let devices = &mut self.one_wire_bus.devices(false, delay);
 
         devices.into_iter().for_each(|device| match device {
             Ok(address) => {
                 if let Err(e) = eventloop::post(
                     &self.sysloop,
-                    &format!("# device ROM {address:X?} / pin: {}", self.pin),
+                    &format!("device ROM {address:X?} / pin: {}", self.pin),
                 ) {
                     error!("ERROR eventloop msg: {e}");
                 }
@@ -227,17 +230,17 @@ impl<P> Sensor<'_, P> {
 
         // in case we want also start new measurement
         if update_measurement.eq(&true) {
-            device.start_temp_measurement(self.one_wire_bus, delay)?;
+            device.start_temp_measurement(&mut self.one_wire_bus, delay)?;
             // max delay
             Resolution::Bits12.delay_for_measurement_time(delay);
         }
 
-        let device_data = device.read_data(self.one_wire_bus, delay)?;
+        let device_data = device.read_data(&mut self.one_wire_bus, delay)?;
 
         if let Err(e) = eventloop::post(
             &self.sysloop,
             &format!(
-                "# device data -> ROM: {device_address:?} TL: {} TH:{} resolution: {:?} {:?}",
+                "device data -> ROM: {device_address:?} TL: {} TH:{} resolution: {:?} {:?}",
                 device_data.alarm_temp_low,
                 device_data.alarm_temp_high,
                 device_data.resolution,
@@ -275,7 +278,7 @@ impl<P> Sensor<'_, P> {
         let device = Ds18b20::new(device_address)?;
 
         // read the initial config values (read from EEPROM by the device when it was first powered)
-        let initial_data = device.read_data(self.one_wire_bus, delay)?;
+        let initial_data = device.read_data(&mut self.one_wire_bus, delay)?;
         info!("initial data: {initial_data:?}");
 
         let resolution = match resolution {
@@ -288,20 +291,20 @@ impl<P> Sensor<'_, P> {
             tl,         // TL -55
             th,         // TH +125
             resolution, // RESOLUTION
-            self.one_wire_bus,
+            &mut self.one_wire_bus,
             delay,
         )?;
 
         // confirm the new config is now in the scratchpad memory
-        let new_data = device.read_data(self.one_wire_bus, delay)?;
+        let new_data = device.read_data(&mut self.one_wire_bus, delay)?;
         info!("new data: {:?}", new_data);
 
         // save the config to EEPROM to save it permanently
-        device.save_to_eeprom(self.one_wire_bus, delay)?;
+        device.save_to_eeprom(&mut self.one_wire_bus, delay)?;
 
         // read the values from EEPROM back to the scratchpad to verify it was saved correctly
-        device.recall_from_eeprom(self.one_wire_bus, delay)?;
-        let eeprom_data = device.read_data(self.one_wire_bus, delay)?;
+        device.recall_from_eeprom(&mut self.one_wire_bus, delay)?;
+        let eeprom_data = device.read_data(&mut self.one_wire_bus, delay)?;
 
         info!("EEPROM data: {:?}", eeprom_data);
 
