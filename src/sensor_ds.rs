@@ -243,9 +243,9 @@ impl<P> Sensor<'_, P> {
         if let Err(e) = eventloop::post(
             sysloop,
             &format!(
-                "device data -> ROM: {device_address:?} TH: {} TL:{} resolution: {:?} {:?}",
-                device_data.alarm_temp_high,
+                "device data -> ROM: {device_address:?} TL: {} TH:{} resolution: {:?} {:?}",
                 device_data.alarm_temp_low,
+                device_data.alarm_temp_high,
                 device_data.resolution,
                 if update_measurement.eq(&true) {
                     Some(device_data.temperature)
@@ -276,7 +276,7 @@ impl<P> Sensor<'_, P> {
         D: DelayUs<u16> + DelayMs<u16>,
         E: Debug,
     {
-        info!("set_config: {device_address:?} TH:{th} TL:{th} resolution:{resolution:?}");
+        info!("set_config: {device_address:?} TL:{tl} TH:{th} resolution:{resolution:?}");
 
         let device = Ds18b20::new(device_address)?;
 

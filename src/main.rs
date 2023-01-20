@@ -163,7 +163,7 @@ fn main() -> Result<(), EspError> {
                             }
                         }
                     } else {
-                        warn!("{rom_to_change:?} not found {list:?}");
+                        warn!("{rom_to_change:?} not found");
                     }
                 });
             };
@@ -219,19 +219,8 @@ fn main() -> Result<(), EspError> {
                 }
 
                 // MEASURE Device(Address)
-                let mut alarm = false;
-                warn!("@measure device {rom_to_change:?} + alarm {alarm}");
-                match sensor.measure(&mut delay, alarm, Route::Device(rom_to_change)) {
-                    Ok(m) => m.iter().for_each(|m| info!("{m}")),
-                    Err(e) => error!(
-                        "[{}] <FREEZER> {rom_to_change:?} measure: {e:?}",
-                        sensor.pin
-                    ),
-                }
-
-                alarm = true;
-                warn!("@measure device {rom_to_change:?} + alarm {alarm}");
-                match sensor.measure(&mut delay, alarm, Route::Device(rom_to_change)) {
+                warn!("@measure device {rom_to_change:?}");
+                match sensor.measure(&mut delay, false, Route::Device(rom_to_change)) {
                     Ok(m) => m.iter().for_each(|m| info!("{m}")),
                     Err(e) => error!(
                         "[{}] <FREEZER> {rom_to_change:?} measure: {e:?}",
