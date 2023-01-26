@@ -4,7 +4,8 @@ mod sensor_ds;
 use eventloop::EventLoopMessage;
 
 use sensor_ds::Route;
-use sensor_ds::Sensor;
+use sensor_ds::Sensor
+;use sensor_ds::OnlyAlarming;
 
 use one_wire_bus::OneWire;
 
@@ -168,7 +169,11 @@ fn main() -> anyhow::Result<()> {
                 warn!("@measure temperature for all sensors OneByOne");
 
                 let start = Instant::now();
-                match sensor.measure(&mut delay, false, Route::ByOne) {
+                //match sensor.measure(&mut delay, false, Route::ByOne) {
+                match sensor.measure(&mut delay,
+                                     OnlyAlarming::False,
+                                     Route::ByOne,
+                ) {
                     Ok(m) => m.iter().for_each(|m| info!("{m}")),
                     Err(e) => error!("[{}] MEASURE single result: {e:?}", sensor.pin),
                 }
@@ -180,18 +185,20 @@ fn main() -> anyhow::Result<()> {
                 sleep.delay_ms(WTD_FEEDER_DURATION);
 
                 // OneShot
-                let mut alarm = false;
-                warn!("@measure temperature for all sensors in OneShot + alarm {alarm}");
+                //let mut alarm = false;
+                let mut alarm = OnlyAlarming::False;
+                warn!("@measure temperature for all sensors in OneShot + alarm {alarm:?}");
                 match sensor.measure(&mut delay, alarm, Route::OneShot) {
                     Ok(m) => m.iter().for_each(|m| info!("{m}")),
-                    Err(e) => error!("[{}] MEASURE all result: {e:?} / {alarm}", sensor.pin),
+                    Err(e) => error!("[{}] MEASURE all result: {e:?} / {alarm:?}", sensor.pin),
                 }
 
-                alarm = true;
-                warn!("@measure temperature for all sensors in OneShot + alarm {alarm} -> will return Unexpeted if no device with alarm");
+                //alarm = true;
+                alarm = OnlyAlarming::True;
+                warn!("@measure temperature for all sensors in OneShot + alarm {alarm:?} -> will return Unexpeted if no device with alarm");
                 match sensor.measure(&mut delay, alarm, Route::OneShot) {
                     Ok(m) => m.iter().for_each(|m| info!("{m}")),
-                    Err(e) => error!("[{}] MEASURE all result: {e:?} / {alarm}", sensor.pin),
+                    Err(e) => error!("[{}] MEASURE all result: {e:?} / {alarm:?}", sensor.pin),
                 }
 
                 // <FREEZER> as SINGLE DEVICE
@@ -207,7 +214,7 @@ fn main() -> anyhow::Result<()> {
 
                 // MEASURE Device(Address)
                 warn!("@measure device {rom_to_change:?}");
-                match sensor.measure(&mut delay, false, Route::Device(rom_to_change)) {
+                match sensor.measure(&mut delay, OnlyAlarming::False, Route::Device(rom_to_change)) {
                     Ok(m) => m.iter().for_each(|m| info!("{m}")),
                     Err(e) => error!(
                         "[{}] <FREEZER> {rom_to_change:?} measure: {e:?}",

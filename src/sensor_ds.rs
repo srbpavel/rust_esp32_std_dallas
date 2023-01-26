@@ -31,6 +31,22 @@ use log::warn;
 
 const WTD_FEEDER_DURATION: u16 = 10; // test more and study watchdog !!!
 
+//todo!() impl Display
+#[derive(Debug, Clone, Copy)]
+pub enum OnlyAlarming {
+    True,
+    False,
+}
+
+impl OnlyAlarming {
+    fn value(&self) -> bool {
+        match *self {
+            Self::True => true,
+            Self::False => false,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Route {
     OneShot,
@@ -102,7 +118,8 @@ impl<P> Sensor<P> {
     pub fn measure<D, E>(
         &mut self,
         delay: &mut D,
-        alarm: bool,
+        //alarm: bool,
+        only_alarming: OnlyAlarming,
         route: Route,
     ) -> OneWireResult<Vec<Measurement>, E>
     where
@@ -110,7 +127,8 @@ impl<P> Sensor<P> {
         D: DelayUs<u16> + DelayMs<u16>,
         E: Debug,
     {
-        info!("measure: {route:?} / {alarm}");
+        info!("measure: {route:?} / {only_alarming:?}");
+        let only_alarming = only_alarming.value();
 
         let mut result: Vec<Measurement> = vec![];
 
@@ -127,7 +145,7 @@ impl<P> Sensor<P> {
                     //// OneWireResult<Option<(Address, SearchState)>, E>
                     let devices =
                         self.one_wire_bus
-                            .device_search(search_state.as_ref(), alarm, delay)?;
+                            .device_search(search_state.as_ref(), only_alarming, delay)?;
 
                     if let Some((device_address, state)) = devices {
                         search_state = Some(state);
@@ -152,7 +170,7 @@ impl<P> Sensor<P> {
                 loop {
                     let devices =
                         self.one_wire_bus
-                            .device_search(search_state.as_ref(), alarm, delay)?;
+                            .device_search(search_state.as_ref(), only_alarming, delay)?;
 
                     if let Some((device_address, state)) = devices {
                         search_state = Some(state);
@@ -239,6 +257,7 @@ impl<P> Sensor<P> {
         delay: &mut D,
         device_address: Address,
         update_measurement: bool,
+        //update_measurement: OnlyAlarming,
     ) -> OneWireResult<SensorConfig, E>
     //) -> OneWireResult<SensorConfig<SensorData>, E>
     where
